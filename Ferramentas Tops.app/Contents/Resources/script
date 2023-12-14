@@ -1,0 +1,30 @@
+#!/bin/bash
+
+clear
+
+echo "<-- hnanoto-Hackintosh and beyond  -->"
+echo "            "
+echo "##### !!! DOWNLOADING FILES !!! #####"
+echo "            "
+mkdir -p "$HOME/Desktop/FerramentasTops"
+cd "$HOME/Desktop/FerramentasTops" || exit 1
+git clone https://github.com/acidanthera/OpenCorePkg.git
+git clone https://github.com/acidanthera/OcBinaryData.git
+git clone https://github.com/corpnewt/ProperTree.git
+git clone https://github.com/benbaker76/Hackintool/releases/tag/4.0.3
+git clone https://github.com/corpnewt/MountEFI.git
+git clone https://github.com/corpnewt/SSDTTime.git
+git clone https://github.com/corpnewt/gibMacOS.git
+git clone https://github.com/corpnewt/GenSMBIOS.git
+git clone https://github.com/corpnewt/USBMap.git
+git clone https://github.com/corpnewt/OC-Update.git
+git clone https://github.com/corpnewt/CPU-Name.git
+# Clonagem de outros repositórios omitida por questões de espaço
+
+
+echo "            "
+echo "##### !!! FINISHED BUILDING KEXTS !!! #####"
+echo "            "
+
+# Move os kexts compilados
+mv "$HOME/Desktop/FerramentasTops/Release/package/Kexts" "$HOME/Desktop/" || exit 1
