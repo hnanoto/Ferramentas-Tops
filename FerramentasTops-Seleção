@@ -1,0 +1,285 @@
+#!/bin/bash
+clear
+
+# Definir cores
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # Sem cor
+
+echo -e "${BLUE}<-- hnanoto-Hackintosh and beyond -->${NC}"
+echo ''
+echo -e "${YELLOW}##### !!! DOWNLOADING FILES !!! #####${NC}"
+echo ''
+
+# Caminho para a pasta de destino na área de trabalho
+destDir="$HOME/Desktop/FerramentasTops"
+
+# Criar o diretório de destino, se não existir
+mkdir -p "$destDir"
+cd "$destDir" || exit 1
+
+# Verificar dependências
+check_dependency() {
+    command -v "$1" >/dev/null 2>&1 || { echo -e "${RED}$1 não está instalado. Por favor, instale $1 e tente novamente.${NC}"; exit 1; }
+}
+
+check_dependency "git"
+check_dependency "curl"
+check_dependency "unzip"
+check_dependency "jq"
+
+# Função para clonar repositórios
+clone_repo() {
+    local repo_url=$1
+    local tool_name=$2
+    local repo_dir="$destDir/$tool_name"
+
+    if [ -d "$repo_dir" ]; then
+        echo -e "${YELLOW}O repositório $tool_name já existe. Pulando...${NC}"
+    else
+        echo -e "${GREEN}Cloning $repo_url into $repo_dir...${NC}"
+        mkdir -p "$repo_dir"
+        git clone "$repo_url" "$repo_dir"
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}Erro ao clonar o repositório $repo_url.${NC}"
+            return 1
+        fi
+    fi
+}
+
+# Função para baixar arquivos e descompactar ZIPs
+download_file() {
+    local file_url=$1
+    local file_name=$2
+    local tool_name=$3
+    local tool_dir="$destDir/$tool_name"
+
+    echo -e "${GREEN}Downloading $file_url to $tool_dir/$file_name...${NC}"
+    mkdir -p "$tool_dir"
+    cd "$tool_dir" || { echo -e "${RED}Erro ao acessar o diretório $tool_dir.${NC}"; return 1; }
+
+    curl -L -# "$file_url" -o "$file_name"
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Erro ao baixar o arquivo $file_url.${NC}"
+        return 1
+    fi
+
+    # Descompactar arquivos .zip ou .tgz
+    if [[ "$file_name" == *.zip ]]; then
+        echo -e "${GREEN}Descompactando $file_name...${NC}"
+        unzip "$file_name"
+    elif [[ "$file_name" == *.tgz ]]; then
+        echo -e "${GREEN}Descompactando $file_name...${NC}"
+        tar -xvzf "$file_name"
+    fi
+
+    # Voltar ao diretório principal
+    cd "$destDir" || { echo -e "${RED}Erro ao retornar ao diretório principal.${NC}"; return 1; }
+}
+
+# Função para baixar o Hardware-Sniffer
+download_hardware_sniffer() {
+    echo -e "${GREEN}Downloading Hardware-Sniffer...${NC}"
+    hardware_sniffer_url="https://github.com/lzhoang2801/Hardware-Sniffer/releases/download/1.9.2/Hardware-Sniffer.exe"
+    download_file "$hardware_sniffer_url" "HardwareSniffer.exe" "HardwareSniffer"
+}
+
+# Função para baixar as versões RELEASE e DEBUG do OpenCore
+download_opencore_binaries() {
+    echo -e "${BLUE}<-- hnanoto-OpenCore Binaries Downloader -->${NC}"
+    echo ''
+    echo -e "${YELLOW}##### !!! DOWNLOADING OpenCore BINARIES !!! #####${NC}"
+    echo ''
+
+    # Endpoint da API do GitHub
+    api_url="https://api.github.com/repos/acidanthera/OpenCorePkg/releases"
+
+    # Obter a URL dos .zip da release mais recente usando curl e jq
+    echo -e "${GREEN}Buscando a versão mais recente do OpenCore...${NC}"
+    response=$(curl -s "$api_url")
+
+    # Verificar se a resposta da API é válida
+    if ! echo "$response" | jq empty; then
+        echo -e "${RED}Erro: Falha ao obter informações da API do GitHub.${NC}"
+        return 1
+    fi
+
+    # Extrair URLs dos arquivos RELEASE e DEBUG
+    release_url=$(echo "$response" | jq -r '.[0].assets[] | select(.browser_download_url | contains("-RELEASE.zip")) | .browser_download_url')
+    debug_url=$(echo "$response" | jq -r '.[0].assets[] | select(.browser_download_url | contains("-DEBUG.zip")) | .browser_download_url')
+
+    # Verificar se as URLs foram encontradas
+    if [ -z "$release_url" ] || [ -z "$debug_url" ]; then
+        echo -e "${RED}Erro: Não foi possível encontrar ambos os arquivos RELEASE e DEBUG na API do GitHub.${NC}"
+        return 1
+    fi
+
+    # Exibir as URLs encontradas para depuração
+    echo -e "${GREEN}URL RELEASE encontrada: $release_url${NC}"
+    echo -e "${GREEN}URL DEBUG encontrada: $debug_url${NC}"
+
+    # Função para baixar e descompactar um arquivo
+    download_and_extract() {
+        local url=$1
+        local type=$2
+        local tool_name="OpenCore"
+        local tool_dir="$destDir/$tool_name/$type"
+
+        echo -e "${GREEN}Baixando $type...${NC}"
+        file_name=$(basename "$url")
+        mkdir -p "$tool_dir"
+        cd "$tool_dir" || { echo -e "${RED}Erro ao acessar o diretório $tool_dir.${NC}"; return 1; }
+
+        # Baixar o arquivo
+        curl -L -# "$url" -o "$file_name"
+
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}Erro ao baixar o arquivo $file_name.${NC}"
+            return 1
+        fi
+
+        # Descompactar o arquivo
+        echo -e "${GREEN}Descompactando $file_name...${NC}"
+        unzip "$file_name"
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}Erro ao descompactar o arquivo $file_name.${NC}"
+            return 1
+        fi
+
+        # Remover o arquivo zip após a descompactação
+        rm "$file_name"
+
+        # Voltar ao diretório principal
+        cd "$destDir" || { echo -e "${RED}Erro ao retornar ao diretório principal.${NC}"; return 1; }
+    }
+
+    # Baixar e descompactar RELEASE
+    download_and_extract "$release_url" "RELEASE"
+
+    # Baixar e descompactar DEBUG
+    download_and_extract "$debug_url" "DEBUG"
+
+    echo -e "${GREEN}Binários do OpenCore baixados e descompactados com sucesso em $destDir/OpenCore.${NC}"
+}
+
+# Função para instalar o Python 3
+install_python3() {
+    echo -e "${BLUE}<-- Installing Python 3 -->${NC}"
+    echo ''
+
+    # Detectar o sistema operacional
+    os_type=$(uname -s)
+
+    case "$os_type" in
+        Darwin*) # macOS
+            echo -e "${GREEN}Detectado macOS. Instalando Python 3...${NC}"
+            if command -v brew >/dev/null 2>&1; then
+                echo -e "${GREEN}Homebrew encontrado. Usando Homebrew para instalar Python 3...${NC}"
+                brew install python
+            else
+                echo -e "${YELLOW}Homebrew não encontrado. Baixando o instalador .pkg do Python 3...${NC}"
+                python_url="https://www.python.org/ftp/python/3.13.2/python-3.13.2-macos11.pkg"
+                download_file "$python_url" "python3.pkg" "Python3"
+                echo -e "${GREEN}Instalador do Python 3 baixado. Execute o arquivo 'python3.pkg' para instalar.${NC}"
+            fi
+            ;;
+        Linux*) # Linux
+            echo -e "${GREEN}Detectado Linux. Instalando Python 3...${NC}"
+            if command -v apt >/dev/null 2>&1; then
+                echo -e "${GREEN}APT encontrado. Usando APT para instalar Python 3...${NC}"
+                sudo apt update && sudo apt install -y python3
+            elif command -v yum >/dev/null 2>&1; then
+                echo -e "${GREEN}YUM encontrado. Usando YUM para instalar Python 3...${NC}"
+                sudo yum install -y python3
+            else
+                echo -e "${YELLOW}Gerenciador de pacotes não encontrado. Baixando o Python 3 diretamente...${NC}"
+                python_url="https://www.python.org/ftp/python/3.13.2/Python-3.13.2.tgz"
+                download_file "$python_url" "Python-3.13.2.tgz" "Python3"
+                echo -e "${GREEN}Python 3 baixado. Extraia o arquivo e siga as instruções para compilar e instalar.${NC}"
+            fi
+            ;;
+        CYGWIN*|MINGW*|MSYS*) # Windows
+            echo -e "${GREEN}Detectado Windows. Baixando o instalador .exe do Python 3...${NC}"
+            python_url="https://www.python.org/ftp/python/3.13.2/python-3.13.2-amd64.exe"
+            download_file "$python_url" "python-3.13.2-amd64.exe" "Python3"
+            echo -e "${GREEN}Instalador do Python 3 baixado. Execute o arquivo 'python-3.13.2-amd64.exe' para instalar.${NC}"
+            ;;
+        *) # Outros sistemas
+            echo -e "${RED}Sistema operacional não suportado para instalação automática do Python 3.${NC}"
+            ;;
+    esac
+}
+# Função para baixar o Hackintool diretamente da API do GitHub
+download_hackintool() {
+    echo -e "${GREEN}Downloading Hackintool...${NC}"
+    latest_release=$(curl -s https://api.github.com/repos/benbaker76/Hackintool/releases/latest | grep 'browser_download_url.*zip' | cut -d '"' -f 4)
+    if [ -z "$latest_release" ]; then
+        echo -e "${RED}Erro ao obter a URL de download do Hackintool da API do GitHub.${NC}"
+        return 1
+    fi
+    download_file "$latest_release" "Hackintool.zip" "Hackintool"
+}
+
+# Menu principal
+while true; do
+    echo -e "${BLUE}Escolha um programa para baixar, 22 para baixar todos ou 0 para sair:${NC}"
+    echo '1) OpenCorePkg (Source)'
+    echo '2) OcBinaryData'
+    echo '3) ProperTree'
+    echo '4) Hackintool'
+    echo '5) MountEFI'
+    echo '6) SSDTTime'
+    echo '7) gibMacOS'
+    echo '8) GenSMBIOS'
+    echo '9) USBMap'
+    echo '10) OC-Update'
+    echo '11) CPU-Name'
+    echo '12) gibMacRecovery'
+    echo '13) CloverBootloader'
+    echo '14) Lilu-and-Friends'
+    echo '15) Update_Clover'
+    echo '16) update_opencore'
+    echo '17) Open_EFIs_FSKIT'
+    echo '18) Python 3'
+    echo '19) Hackintool-On-AppleSilicon'
+    echo '20) OpCore-Simplify'
+    echo '21) Hardware-Sniffer'
+    echo '22) OpenCore Binaries (RELEASE e DEBUG)'
+    echo '0) Sair'
+    read -p 'Digite sua escolha: ' choice
+
+    case $choice in
+        1) clone_repo 'https://github.com/acidanthera/OpenCorePkg.git' "OpenCorePkg" ;;
+        2) clone_repo 'https://github.com/acidanthera/OcBinaryData.git' "OcBinaryData" ;;
+        3) clone_repo 'https://github.com/corpnewt/ProperTree.git' "ProperTree" ;;
+        4) download_hackintool ;;
+        5) clone_repo 'https://github.com/corpnewt/MountEFI.git' "MountEFI" ;;
+        6) clone_repo 'https://github.com/corpnewt/SSDTTime.git' "SSDTTime" ;;
+        7) clone_repo 'https://github.com/corpnewt/gibMacOS.git' "gibMacOS" ;;
+        8) clone_repo 'https://github.com/corpnewt/GenSMBIOS.git' "GenSMBIOS" ;;
+        9) clone_repo 'https://github.com/corpnewt/USBMap.git' "USBMap" ;;
+        10) clone_repo 'https://github.com/corpnewt/OC-Update.git' "OC-Update" ;;
+        11) clone_repo 'https://github.com/corpnewt/CPU-Name.git' "CPU-Name" ;;
+        12) clone_repo 'https://github.com/corpnewt/gibMacRecovery.git' "gibMacRecovery" ;;
+        13) clone_repo 'https://github.com/CloverHackyColor/CloverBootloader.git' "CloverBootloader" ;;
+        14) clone_repo 'https://github.com/corpnewt/Lilu-and-Friends.git' "Lilu-and-Friends" ;;
+        15) clone_repo 'https://github.com/hnanoto/Update_Clover.git' "Update_Clover" ;;
+        16) clone_repo 'https://github.com/hnanoto/update_opencore.git' "update_opencore" ;;
+        17) download_file 'https://github.com/hnanoto/Open_EFIs_FSKIT/releases/latest/download/Open_EFIs_FSKIT.zip' 'Open_EFIs_FSKIT.zip' "Open_EFIs_FSKIT" ;;
+        18) install_python3 ;;
+        19) clone_repo 'https://github.com/RoidMC/Hackintool-On-AppleSilicon.git' "Hackintool-On-AppleSilicon" ;;
+        20) clone_repo 'https://github.com/lzhoang2801/OpCore-Simplify.git' "OpCore-Simplify" ;;
+        21) download_hardware_sniffer ;;
+        22) download_opencore_binaries ;;
+        0) echo -e "${RED}Saindo...${NC}"; break ;;
+        *) echo -e "${RED}Opção inválida. Tente novamente.${NC}" ;;
+    esac
+    echo ''
+done
+
+echo -e "${YELLOW}##### !!! FINISHED DOWNLOADING FILES !!! #####${NC}"
+echo ''
+
+exit 0
