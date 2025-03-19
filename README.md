@@ -1,4 +1,4 @@
-Ferramentas tops testes sistemas
+Ferramentas tops sistemas
 
 In windows open PowerShell as a administrator and run below command:
 
